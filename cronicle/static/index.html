@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cronicle</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header>
+  <h1>cronicle</h1>
+  <span id="health" class="health" title="backend status">…</span>
+</header>
+<main>
+  <section>
+    <div class="row">
+      <h2>Jobs</h2>
+      <button id="add-toggle" type="button">Add job</button>
+    </div>
+    <p id="cron-warning" class="warning" hidden></p>
+    <form id="job-form" hidden>
+      <input type="hidden" id="f-id">
+      <label>Name <input id="f-name" placeholder="backup (optional)"></label>
+      <label>Schedule <input id="f-schedule" placeholder="0 2 * * *" required></label>
+      <label>Command <input id="f-command" placeholder="/opt/backup.sh" required></label>
+      <label class="check"><input type="checkbox" id="f-enabled" checked> Enabled</label>
+      <div>
+        <button type="submit">Save</button>
+        <button type="button" id="f-cancel">Cancel</button>
+      </div>
+      <p class="hint">Saved jobs run through a logging wrapper; the command you see stays the source of truth.</p>
+    </form>
+    <table id="jobs">
+      <thead><tr><th>Name</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section>
+    <div class="row">
+      <h2>Recent runs</h2>
+      <label class="inline">Job
+        <select id="run-filter"><option value="">All</option></select>
+      </label>
+      <button id="runs-refresh" type="button">Refresh</button>
+    </div>
+    <table id="runs">
+      <thead><tr><th>Status</th><th>Job</th><th>Started</th><th>Duration</th><th>Exit</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section id="log-section" hidden>
+    <div class="row">
+      <h2>Log <span id="log-id" class="mono"></span></h2>
+      <button id="log-close" type="button">Close</button>
+    </div>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

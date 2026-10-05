@@ -1,0 +1,25 @@
+[project]
+name = "cronicle"
+version = "0.1.0"
+description = "Small web UI + CLI for managing cron jobs, monitoring runs, and reading logs."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "typer",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[project.scripts]
+cronicle = "cronicle.cli:app"
+cronicle-run = "cronicle.runner:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
