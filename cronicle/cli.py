@@ -158,7 +158,7 @@ def runs_log(run_id: str = typer.Argument(...),
 
 
 @app.command("serve")
-def serve(port: int = typer.Option(8130, "--port"),
+def serve(port: int = typer.Option(8231, "--port"),
           host: str = typer.Option("127.0.0.1", "--host")) -> None:
     """Start the web UI + API server."""
     import uvicorn

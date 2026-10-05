@@ -47,7 +47,7 @@ uv pip install -e ".[dev]"
 cronicle serve
 ```
 
-Then open http://127.0.0.1:8130 in a browser. Binds localhost only, no login.
+Then open http://127.0.0.1:8231 in a browser. Binds localhost only, no login.
 
 ## CLI
 
