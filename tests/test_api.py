@@ -47,3 +47,11 @@ def test_validation_and_404s(client):
 def test_health_and_index(client):
     assert client.get("/api/health").json()["ok"] is True
     assert client.get("/").status_code == 200
+
+
+def test_parse_schedule(client):
+    r = client.post("/api/parse-schedule", json={"text": "Every Wednesday at 5pm"})
+    assert r.status_code == 200
+    assert r.json() == {"schedule": "0 17 * * 3"}
+    r = client.post("/api/parse-schedule", json={"text": "sometime-ish"})
+    assert r.status_code == 400

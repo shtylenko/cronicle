@@ -125,6 +125,32 @@ document.querySelector("#add-toggle").onclick = () => {
   form.hidden = !form.hidden;
 };
 document.querySelector("#f-cancel").onclick = () => { form.hidden = true; };
+document.querySelector("#nl-toggle").onclick = () => {
+  const row = document.querySelector("#nl-input-row");
+  row.hidden = !row.hidden;
+  if (!row.hidden) document.querySelector("#nl-text").focus();
+};
+async function applyPlainEnglish() {
+  const text = document.querySelector("#nl-text").value.trim();
+  const err = document.querySelector("#nl-error");
+  if (!text) return;
+  try {
+    const out = await api("/api/parse-schedule", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text}),
+    });
+    document.querySelector("#f-schedule").value = out.schedule;
+    err.hidden = true;
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+}
+document.querySelector("#nl-go").onclick = applyPlainEnglish;
+document.querySelector("#nl-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); applyPlainEnglish(); }
+});
 document.querySelector("#log-close").onclick = () => {
   document.querySelector("#log-section").hidden = true;
 };

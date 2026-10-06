@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import core, runner, store
+from . import core, nlparse, runner, store
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -29,6 +29,10 @@ class JobPatch(BaseModel):
     schedule: str | None = None
     command: str | None = None
     enabled: bool | None = None
+
+
+class ParseIn(BaseModel):
+    text: str
 
 
 def _job_dict(j: core.Job) -> dict:
@@ -102,6 +106,15 @@ def jobs_run(job_id: str) -> dict:
     run = store.get_run(run_id)
     assert run is not None
     return _run_dict(run)
+
+
+@app.post("/api/parse-schedule")
+def parse_schedule(body: ParseIn) -> dict:
+    """Turn plain English ('Every Wednesday at 5pm') into a cron schedule."""
+    try:
+        return {"schedule": nlparse.parse_natural_schedule(body.text)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/runs")

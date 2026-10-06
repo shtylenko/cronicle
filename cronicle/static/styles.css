@@ -1,39 +1,56 @@
+:root {
+  color-scheme: dark;
+  --bg: #10151c;
+  --panel: #19212c;
+  --muted: #94a5ba;
+  --line: #324253;
+  --accent: #67bafa;
+  --text: #e4edf7;
+  --pass: #64d4a3;
+  --fail: #ff967d;
+}
 body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #222;
-  background: #fff;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 16px 48px;
   line-height: 1.45;
 }
-header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #222; padding: 12px 0; }
+header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid var(--line); padding: 12px 0; }
 header h1 { font-size: 22px; margin: 0; letter-spacing: 0.5px; }
-.health { font-size: 13px; color: #666; }
-.health.bad { color: #b00; }
+.health { font-size: 13px; color: var(--muted); }
+.health.bad { color: var(--fail); }
 h2 { font-size: 17px; margin: 26px 0 8px; }
 .row { display: flex; align-items: center; gap: 12px; }
 .row h2 { margin-right: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
-th { font-size: 12px; text-transform: none; color: #555; border-bottom-color: #bbb; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); }
 .mono, td code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
-td code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; }
-button { font-size: 13px; padding: 5px 12px; cursor: pointer; }
+td code { background: #0c1117; padding: 1px 5px; border-radius: 3px; }
+button, input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 5px 12px; font-size: 13px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
 td.actions { white-space: nowrap; }
 td.actions button { padding: 2px 8px; margin-right: 4px; }
 .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; }
-.pill.ok { background: #dff0dc; color: #1e6b1e; }
-.pill.failed { background: #f7dada; color: #a00; }
-.pill.running { background: #e2e8f5; color: #2c4a8a; }
-.pill.off { background: #eee; color: #666; }
-.warning { background: #fdf3d7; border: 1px solid #e0c97a; padding: 8px 12px; font-size: 14px; }
-#job-form { border: 1px solid #bbb; padding: 12px; margin: 10px 0; display: grid; gap: 8px; max-width: 560px; }
-#job-form label { display: grid; gap: 3px; font-size: 13px; }
-#job-form input[type=text], #f-name, #f-schedule, #f-command { font-size: 14px; padding: 5px 8px; }
+.pill.ok { background: #1d3a2f; color: var(--pass); }
+.pill.failed { background: #3d2320; color: var(--fail); }
+.pill.running { background: #1d2f42; color: var(--accent); }
+.pill.off { background: #222a35; color: var(--muted); }
+.warning { background: #2a2410; border: 1px solid #6a5c2c; color: #e3c878; padding: 8px 12px; font-size: 14px; border-radius: 4px; }
+#job-form { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 10px 0; display: grid; gap: 8px; max-width: 560px; }
+#job-form label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
 #job-form .check { display: flex; gap: 6px; align-items: center; }
-.hint { font-size: 12px; color: #666; margin: 0; }
-label.inline { font-size: 13px; display: flex; gap: 6px; align-items: center; }
-#log { background: #111; color: #e8e8e8; padding: 12px; font-size: 13px; overflow-x: auto; max-height: 480px; overflow-y: auto; }
+#job-form input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.error { font-size: 12px; color: var(--fail); margin: 0; }
+#nl-input-row { display: flex; gap: 6px; }
+#nl-input-row input { flex: 1; }
+label.inline { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+#log { background: #0b0e13; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 12px; font-size: 13px; overflow-x: auto; max-height: 480px; overflow-y: auto; }
 tr.run-row { cursor: pointer; }
-tr.run-row:hover td { background: #f5f5f5; }
+tr.run-row:hover td { background: #1a2230; }

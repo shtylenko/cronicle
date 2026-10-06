@@ -22,6 +22,14 @@
       <input type="hidden" id="f-id">
       <label>Name <input id="f-name" placeholder="backup (optional)"></label>
       <label>Schedule <input id="f-schedule" placeholder="0 2 * * *" required></label>
+      <div>
+        <button type="button" id="nl-toggle">Use plain English</button>
+      </div>
+      <div id="nl-input-row" hidden>
+        <input id="nl-text" placeholder="Every Wednesday at 5pm">
+        <button type="button" id="nl-go">Set schedule</button>
+      </div>
+      <p id="nl-error" class="error" hidden></p>
       <label>Command <input id="f-command" placeholder="/opt/backup.sh" required></label>
       <label class="check"><input type="checkbox" id="f-enabled" checked> Enabled</label>
       <div>

@@ -6,6 +6,7 @@ and per-run logs. The web UI is for humans; the CLI is script- and agent-friendl
 - List, add, update, delete jobs in your user crontab
 - See recent executions (ok / failed) with durations and exit codes
 - Read captured stdout/stderr per run
+- Plain-English scheduling in the web UI ("Every Wednesday at 5pm")
 
 ## How it works
 
@@ -44,10 +45,11 @@ uv pip install -e ".[dev]"
 ## Web UI
 
 ```sh
-cronicle serve
+./run.sh
 ```
 
 Then open http://127.0.0.1:8231 in a browser. Binds localhost only, no login.
+(`CRONICLE_PORT` overrides the port; `cronicle serve` runs without the launcher.)
 
 ## CLI
 
