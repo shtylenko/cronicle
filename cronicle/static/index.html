@@ -4,13 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cronicle</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
 <header>
   <h1>cronicle</h1>
   <span id="health" class="health" title="backend status">…</span>
+  <label class="inline">Project
+    <select id="project-filter"><option value="">All</option></select>
+  </label>
+  <button id="projects-toggle" type="button">Projects…</button>
 </header>
+<div id="project-manager" hidden>
+  <div id="project-list"></div>
+  <div class="pm-add">
+    <input id="pm-new" placeholder="New project name">
+    <button id="pm-add" type="button">Add project</button>
+  </div>
+  <p id="pm-error" class="error" hidden></p>
+</div>
 <main>
   <section>
     <div class="row">
@@ -21,6 +34,8 @@
     <form id="job-form" hidden>
       <input type="hidden" id="f-id">
       <label>Name <input id="f-name" placeholder="backup (optional)"></label>
+      <label>Description <input id="f-desc" placeholder="What is this job for? (optional)"></label>
+      <label>Project <select id="f-project"><option value="">Unassigned</option></select></label>
       <label>Schedule <input id="f-schedule" placeholder="0 2 * * *" required></label>
       <div>
         <button type="button" id="nl-toggle">Use plain English</button>
@@ -39,7 +54,7 @@
       <p class="hint">Saved jobs run through a logging wrapper; the command you see stays the source of truth.</p>
     </form>
     <table id="jobs">
-      <thead><tr><th>Name</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Project</th><th>Description</th><th>Schedule</th><th>Runs</th><th>Command</th><th>Status</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
   </section>

@@ -9,6 +9,14 @@ async function api(path, opts) {
 const jobsBody = document.querySelector("#jobs tbody");
 const runsBody = document.querySelector("#runs tbody");
 const form = document.querySelector("#job-form");
+const NONE_PROJECT = "__none__"; // filter value meaning Unassigned
+
+function currentProjectParam() {
+  // null = all projects (no query param), "" = unassigned, name = one project
+  const v = document.querySelector("#project-filter").value;
+  if (v === "") return null;
+  return v === NONE_PROJECT ? "" : v;
+}
 
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -32,23 +40,45 @@ async function refreshHealth() {
   }
 }
 
+async function refreshProjects() {
+  let projects = [];
+  try {
+    projects = await api("/api/projects");
+  } catch (e) {
+    // leave project UI at defaults; jobs still work unfiltered
+  }
+  const filt = document.querySelector("#project-filter");
+  const keep = filt.value;
+  filt.innerHTML = `<option value="">All</option><option value="${NONE_PROJECT}">Unassigned</option>` +
+    projects.map((p) => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+  filt.value = [...filt.options].some((o) => o.value === keep) ? keep : "";
+  const fsel = document.querySelector("#f-project");
+  const fkeep = fsel.value;
+  fsel.innerHTML = `<option value="">Unassigned</option>` +
+    projects.map((p) => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+  if ([...fsel.options].some((o) => o.value === fkeep)) fsel.value = fkeep;
+  renderProjectManager(projects);
+}
+
 async function refreshJobs() {
+  const proj = currentProjectParam();
+  const q = proj === null ? "" : `?project=${encodeURIComponent(proj)}`;
   let jobs;
   try {
-    jobs = await api("/api/jobs");
+    jobs = await api("/api/jobs" + q);
   } catch (e) {
-    jobsBody.innerHTML = `<tr><td colspan="5">Failed to load jobs: ${esc(e.message)}</td></tr>`;
+    jobsBody.innerHTML = `<tr><td colspan="8">Failed to load jobs: ${esc(e.message)}</td></tr>`;
     return;
   }
-  jobsBody.innerHTML = jobs.length ? "" : `<tr><td colspan="5">No cron jobs yet.</td></tr>`;
+  jobsBody.innerHTML = jobs.length ? "" : `<tr><td colspan="8">No cron jobs yet.</td></tr>`;
   for (const j of jobs) {
     const tr = document.createElement("tr");
     const status = j.enabled
       ? (j.wrapped ? `<span class="pill ok">on · logged</span>` : `<span class="pill running">on · raw</span>`)
       : `<span class="pill off">off</span>`;
     tr.innerHTML =
-      `<td>${esc(j.name || "(unnamed)")}<br><span class="mono" style="color:#666">${esc(j.id)}</span></td>` +
-      `<td><code>${esc(j.schedule)}</code></td><td><code>${esc(j.command)}</code></td>` +
+      `<td>${esc(j.name || "(unnamed)")}<br><span class="mono" style="color:var(--muted)">${esc(j.id)}</span></td><td>${esc(j.project || "—")}</td><td>${esc(j.description || "")}</td>` +
+      `<td class="nowrap"><code>${esc(j.schedule)}</code></td><td class="nowrap">${esc(j.schedule_human || j.schedule)}</td><td><code>${esc(j.command)}</code></td>` +
       `<td>${status}</td>` +
       `<td class="actions"><button data-a="run">Run</button><button data-a="edit">Edit</button><button data-a="del">Delete</button></td>`;
     tr.querySelector('[data-a="run"]').onclick = async () => {
@@ -58,6 +88,15 @@ async function refreshJobs() {
     tr.querySelector('[data-a="edit"]').onclick = () => {
       document.querySelector("#f-id").value = j.id;
       document.querySelector("#f-name").value = j.name || "";
+      document.querySelector("#f-desc").value = j.description || "";
+      const fsel = document.querySelector("#f-project");
+      if (j.project && ![...fsel.options].some((o) => o.value === j.project)) {
+        const o = document.createElement("option");
+        o.value = j.project;
+        o.textContent = j.project;
+        fsel.appendChild(o);
+      }
+      fsel.value = j.project || "";
       document.querySelector("#f-schedule").value = j.schedule;
       document.querySelector("#f-command").value = j.command;
       document.querySelector("#f-enabled").checked = j.enabled;
@@ -85,7 +124,11 @@ function fmtDur(ms) {
 
 async function refreshRuns() {
   const jobId = document.querySelector("#run-filter").value;
-  const q = jobId ? `?job_id=${encodeURIComponent(jobId)}&limit=50` : "?limit=50";
+  const proj = currentProjectParam();
+  let q;
+  if (jobId) q = `?job_id=${encodeURIComponent(jobId)}&limit=50`;
+  else if (proj !== null) q = `?project=${encodeURIComponent(proj)}&limit=50`;
+  else q = "?limit=50";
   let runs;
   try {
     runs = await api("/api/runs" + q);
@@ -156,12 +199,93 @@ document.querySelector("#log-close").onclick = () => {
 };
 document.querySelector("#runs-refresh").onclick = refreshRuns;
 document.querySelector("#run-filter").onchange = refreshRuns;
+document.querySelector("#project-filter").onchange = () => {
+  document.querySelector("#run-filter").value = "";
+  refreshJobs();
+  refreshRuns();
+};
+document.querySelector("#projects-toggle").onclick = () => {
+  const pm = document.querySelector("#project-manager");
+  pm.hidden = !pm.hidden;
+};
+
+function renderProjectManager(projects) {
+  const list = document.querySelector("#project-list");
+  list.innerHTML = "";
+  if (!projects.length) {
+    list.innerHTML = `<p class="hint">No projects yet. Jobs stay Unassigned until linked.</p>`;
+  }
+  for (const p of projects) {
+    const row = document.createElement("div");
+    row.className = "pm-row";
+    const n = p.job_count === 1 ? "1 job" : `${p.job_count} jobs`;
+    row.innerHTML = `<input value="${esc(p.name)}">` +
+      `<span class="mono muted">${esc(n)}</span>` +
+      `<button data-a="save">Rename</button><button data-a="del">Delete</button>`;
+    const err = document.querySelector("#pm-error");
+    row.querySelector('[data-a="save"]').onclick = async () => {
+      try {
+        await api(`/api/projects/${encodeURIComponent(p.name)}`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: row.querySelector("input").value}),
+        });
+        err.hidden = true;
+        refreshProjects();
+        refreshJobs();
+        refreshRuns();
+      } catch (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+      }
+    };
+    row.querySelector('[data-a="del"]').onclick = async () => {
+      if (!confirm(`Delete project '${p.name}'?`)) return;
+      try {
+        await api(`/api/projects/${encodeURIComponent(p.name)}`, {method: "DELETE"});
+        err.hidden = true;
+        refreshProjects();
+        refreshJobs();
+        refreshRuns();
+      } catch (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+      }
+    };
+    list.appendChild(row);
+  }
+}
+
+async function addProject() {
+  const input = document.querySelector("#pm-new");
+  const err = document.querySelector("#pm-error");
+  if (!input.value.trim()) return;
+  try {
+    await api("/api/projects", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: input.value}),
+    });
+    input.value = "";
+    err.hidden = true;
+    refreshProjects();
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+}
+document.querySelector("#pm-add").onclick = addProject;
+document.querySelector("#pm-new").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); addProject(); }
+});
 
 form.onsubmit = async (e) => {
   e.preventDefault();
   const id = document.querySelector("#f-id").value;
   const payload = {
     name: document.querySelector("#f-name").value,
+    description: document.querySelector("#f-desc").value,
+    project: document.querySelector("#f-project").value,
     schedule: document.querySelector("#f-schedule").value,
     command: document.querySelector("#f-command").value,
     enabled: document.querySelector("#f-enabled").checked,
@@ -177,5 +301,7 @@ form.onsubmit = async (e) => {
 };
 
 refreshHealth();
-refreshJobs();
-refreshRuns();
+refreshProjects().then(() => {
+  refreshJobs();
+  refreshRuns();
+});

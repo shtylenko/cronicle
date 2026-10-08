@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS runs(
   duration_ms INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_runs_job_started ON runs(job_id, started_at DESC);
+CREATE TABLE IF NOT EXISTS projects(
+  name TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
 """
 
 FULL_LOG_CAP_BYTES = 1024 * 1024  # cap for untailed reads
@@ -47,6 +51,79 @@ def _db() -> sqlite3.Connection:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class ProjectError(Exception):
+    pass
+
+
+class ProjectExists(ProjectError):
+    pass
+
+
+class ProjectNotFound(ProjectError):
+    pass
+
+
+def list_projects() -> list[dict]:
+    con = _db()
+    try:
+        rows = con.execute("SELECT name, created_at FROM projects ORDER BY name").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        con.close()
+
+
+def create_project(name: str) -> dict:
+    from .core import validate_project_name
+
+    name = validate_project_name(name)
+    con = _db()
+    try:
+        try:
+            con.execute("INSERT INTO projects(name, created_at) VALUES (?, ?)",
+                        (name, _now_iso()))
+            con.commit()
+        except sqlite3.IntegrityError:
+            raise ProjectExists(f"project '{name}' already exists")
+        row = con.execute("SELECT name, created_at FROM projects WHERE name = ?",
+                          (name,)).fetchone()
+        return dict(row)
+    finally:
+        con.close()
+
+
+def rename_project(old: str, new: str) -> dict:
+    from .core import validate_project_name
+
+    new = validate_project_name(new)
+    con = _db()
+    try:
+        row = con.execute("SELECT name FROM projects WHERE name = ?", (old,)).fetchone()
+        if row is None:
+            raise ProjectNotFound(f"no project '{old}'")
+        if old != new:
+            try:
+                con.execute("UPDATE projects SET name = ? WHERE name = ?", (new, old))
+                con.commit()
+            except sqlite3.IntegrityError:
+                raise ProjectExists(f"project '{new}' already exists")
+        row = con.execute("SELECT name, created_at FROM projects WHERE name = ?",
+                          (new,)).fetchone()
+        return dict(row)
+    finally:
+        con.close()
+
+
+def delete_project(name: str) -> None:
+    con = _db()
+    try:
+        cur = con.execute("DELETE FROM projects WHERE name = ?", (name,))
+        con.commit()
+        if cur.rowcount == 0:
+            raise ProjectNotFound(f"no project '{name}'")
+    finally:
+        con.close()
 
 
 def record_start(job_id: str, job_name: str = "") -> tuple[str, str]:

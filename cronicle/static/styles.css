@@ -9,14 +9,14 @@
   --pass: #64d4a3;
   --fail: #ff967d;
 }
+[hidden] { display: none !important; }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 16px 48px;
+  margin: 0;
+  padding: 0 24px 48px;
   line-height: 1.45;
 }
 header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid var(--line); padding: 12px 0; }
@@ -30,6 +30,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 12px; color: var(--muted); }
 .mono, td code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+td.nowrap { white-space: nowrap; }
 td code { background: #0c1117; padding: 1px 5px; border-radius: 3px; }
 button, input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 5px 12px; font-size: 13px; }
 button { cursor: pointer; }
@@ -51,6 +52,12 @@ td.actions button { padding: 2px 8px; margin-right: 4px; }
 #nl-input-row { display: flex; gap: 6px; }
 #nl-input-row input { flex: 1; }
 label.inline { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.muted { color: var(--muted); }
+#project-manager { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 12px; max-width: 560px; display: grid; gap: 8px; }
+.pm-row { display: flex; gap: 8px; align-items: center; }
+.pm-row input { flex: 1; }
+.pm-add { display: flex; gap: 8px; }
+.pm-add input { flex: 1; }
 #log { background: #0b0e13; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 12px; font-size: 13px; overflow-x: auto; max-height: 480px; overflow-y: auto; }
 tr.run-row { cursor: pointer; }
 tr.run-row:hover td { background: #1a2230; }

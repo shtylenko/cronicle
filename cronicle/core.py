@@ -24,6 +24,8 @@ import sys
 from dataclasses import dataclass, field
 
 MARKER_RE = re.compile(r"^#\s*cronicle\s+id=(\S+)(?:\s+name=(.*))?\s*$")
+AUX_RE = re.compile(r"^#\s*cronicle:([A-Za-z][\w-]*)\s?(.*)$")
+PROJECT_NAME_RE = re.compile(r"^[\w\-. ]+$")
 FIELD_RE = re.compile(r"^[\dA-Za-z\*,/\-]+$")
 ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\s*=")
 AT_SCHEDULES = {"@reboot", "@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"}
@@ -52,6 +54,9 @@ class Job:
     name: str
     schedule: str
     command: str  # original command (wrapper stripped for display)
+    description: str = ""
+    project: str = ""
+    extra: list[str] = field(default_factory=list)  # unknown aux lines, preserved verbatim
     enabled: bool = True
     wrapped: bool = False  # command runs through cronicle-run, so runs are logged
     managed: bool = False  # has a cronicle marker comment
@@ -187,22 +192,48 @@ def parse_crontab(text: str) -> list[_Seg]:
     while i < len(lines):
         line = lines[i]
         marker = MARKER_RE.match(line.strip())
-        if marker and i + 1 < len(lines):
-            parsed = try_parse_entry(lines[i + 1])
-            if parsed:
-                schedule, command, enabled = parsed
-                original, wrapped, _ = unwrap(command)
-                segs.append(_Seg(kind="job", lines=[line, lines[i + 1]], job=Job(
-                    id=marker.group(1),
-                    name=(marker.group(2) or "").strip(),
-                    schedule=schedule,
-                    command=original,
-                    enabled=enabled,
-                    wrapped=wrapped,
-                    managed=True,
-                )))
-                i += 2
-                continue
+        if marker:
+            j = i + 1
+            descs: list[str] = []
+            aux_lines: list[str] = []
+            project = ""
+            extra: list[str] = []
+            while j < len(lines):
+                am = AUX_RE.match(lines[j].strip())
+                if not am:
+                    break
+                aux_lines.append(lines[j])
+                key, value = am.group(1), am.group(2).strip()
+                if key == "desc":
+                    descs.append(value)
+                elif key == "project" and not project:
+                    project = value
+                else:
+                    extra.append(lines[j])
+                j += 1
+            if j < len(lines):
+                parsed = try_parse_entry(lines[j])
+                if parsed:
+                    schedule, command, enabled = parsed
+                    original, wrapped, _ = unwrap(command)
+                    segs.append(_Seg(kind="job", lines=[line] + aux_lines + [lines[j]], job=Job(
+                        id=marker.group(1),
+                        name=(marker.group(2) or "").strip(),
+                        schedule=schedule,
+                        command=original,
+                        description="\n".join(descs),
+                        project=project,
+                        extra=extra,
+                        enabled=enabled,
+                        wrapped=wrapped,
+                        managed=True,
+                    )))
+                    i = j + 1
+                    continue
+            # orphan marker (no entry below): preserve as ordinary lines
+            segs.append(_Seg(kind="other", lines=[line]))
+            i += 1
+            continue
         parsed = try_parse_entry(line)
         if parsed:
             schedule, command, enabled = parsed
@@ -258,6 +289,17 @@ def validate_command(command: str) -> str:
     return command
 
 
+def validate_project_name(name: str) -> str:
+    name = name.strip()
+    if not name:
+        raise InvalidJob("project name must not be empty.")
+    if len(name) > 60 or not PROJECT_NAME_RE.match(name):
+        raise InvalidJob(
+            f"invalid project name {name!r}: use up to 60 letters, digits, "
+            "spaces, dots, dashes, underscores.")
+    return name
+
+
 def list_jobs() -> list[Job]:
     text = read_crontab_text()
     return [seg.job for seg in parse_crontab(text) if seg.kind == "job" and seg.job]
@@ -284,24 +326,46 @@ def _marker_line(job_id: str, name: str) -> str:
     return f"# cronicle id={job_id} name={name}" if name else f"# cronicle id={job_id}"
 
 
-def add_job(schedule: str, command: str, name: str = "", enabled: bool = True) -> Job:
+def _desc_lines(description: str) -> list[str]:
+    return [f"# cronicle:desc {dl.strip()}" for dl in description.split("\n") if dl.strip()]
+
+
+def _job_lines(job: Job, entry: str) -> list[str]:
+    lines = [_marker_line(job.id, job.name)]
+    if job.project:
+        lines.append(f"# cronicle:project {job.project}")
+    lines.extend(_desc_lines(job.description))
+    lines.extend(job.extra)
+    lines.append(entry)
+    return lines
+
+
+def _entry_line(schedule: str, job_id: str, command: str, enabled: bool) -> str:
+    entry = f"{schedule} {wrap_command(job_id, command)}"
+    return entry if enabled else f"# {entry}"
+
+
+def add_job(schedule: str, command: str, name: str = "", enabled: bool = True,
+            description: str = "", project: str = "") -> Job:
     schedule = validate_schedule(schedule)
     command = validate_command(command)
+    if project:
+        project = validate_project_name(project)
     job_id = secrets.token_hex(4)
-    entry = f"{schedule} {wrap_command(job_id, command)}"
-    if not enabled:
-        entry = f"# {entry}"
+    job = Job(id=job_id, name=" ".join(name.split()), schedule=schedule,
+              command=command, description=description.strip(), project=project,
+              enabled=enabled, wrapped=True, managed=True)
     text = read_crontab_text()
     if text and not text.endswith("\n"):
         text += "\n"
-    text += f"{_marker_line(job_id, name)}\n{entry}\n"
+    text += "\n".join(_job_lines(job, _entry_line(schedule, job_id, command, enabled))) + "\n"
     write_crontab_text(text)
-    return Job(id=job_id, name=" ".join(name.split()), schedule=schedule,
-               command=command, enabled=enabled, wrapped=True, managed=True)
+    return job
 
 
 def update_job(job_id: str, name: str | None = None, schedule: str | None = None,
-               command: str | None = None, enabled: bool | None = None) -> Job:
+               command: str | None = None, enabled: bool | None = None,
+               description: str | None = None, project: str | None = None) -> Job:
     segs = parse_crontab(read_crontab_text())
     seg = _find_job_seg(segs, job_id)
     assert seg.job is not None
@@ -310,15 +374,33 @@ def update_job(job_id: str, name: str | None = None, schedule: str | None = None
     new_schedule = validate_schedule(schedule) if schedule is not None else job.schedule
     new_command = validate_command(command) if command is not None else job.command
     new_enabled = job.enabled if enabled is None else enabled
+    new_desc = job.description if description is None else description.strip()
+    new_project = job.project if project is None else (
+        validate_project_name(project) if project.strip() else "")
     new_job = Job(id=job.id, name=new_name, schedule=new_schedule, command=new_command,
+                  description=new_desc, project=new_project, extra=job.extra,
                   enabled=new_enabled, wrapped=True, managed=True)
-    entry = f"{new_schedule} {wrap_command(job.id, new_command)}"
-    if not new_enabled:
-        entry = f"# {entry}"
-    seg.lines = [_marker_line(job.id, new_name), entry]
+    seg.lines = _job_lines(new_job, _entry_line(new_schedule, job.id, new_command, new_enabled))
     seg.job = new_job
     write_crontab_text(_segments_to_text(segs))
     return new_job
+
+
+def rename_project_refs(old: str, new: str) -> int:
+    """Point every job linked to `old` at `new`. Returns jobs updated."""
+    new = validate_project_name(new)
+    segs = parse_crontab(read_crontab_text())
+    count = 0
+    for seg in segs:
+        if seg.kind != "job" or not seg.job or seg.job.project != old:
+            continue
+        seg.job.project = new
+        entry = seg.lines[-1]
+        seg.lines = _job_lines(seg.job, entry)
+        count += 1
+    if count:
+        write_crontab_text(_segments_to_text(segs))
+    return count
 
 
 def delete_job(job_id: str) -> None:

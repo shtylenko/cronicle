@@ -7,6 +7,8 @@ and per-run logs. The web UI is for humans; the CLI is script- and agent-friendl
 - See recent executions (ok / failed) with durations and exit codes
 - Read captured stdout/stderr per run
 - Plain-English scheduling in the web UI ("Every Wednesday at 5pm")
+- Projects: group jobs, filter the UI by project (rename propagates, delete is
+  blocked while jobs are linked)
 
 ## How it works
 
@@ -64,6 +66,13 @@ cronicle runs list --limit 20
 cronicle runs list --job <id> --json
 cronicle runs show <run-id> --tail 50
 cronicle runs log <run-id> --tail 200
+
+cronicle projects list
+cronicle projects add trading
+cronicle projects rename trading markets
+cronicle projects delete old-proj --yes
+cronicle jobs list --project trading
+cronicle jobs update <id> --project trading   # '' unlinks
 ```
 
 The CLI works directly on the crontab + SQLite store, so no server is needed

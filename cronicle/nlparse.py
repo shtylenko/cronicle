@@ -201,3 +201,206 @@ def parse_natural_schedule(text: str) -> str:
 
     sched = f"{minute} {hour} {dom or '*'} {month} {','.join(map(str, days)) if days else '*'}"
     return validate_schedule(sched)
+
+
+# --- cron -> plain English (display only; never raises) ---
+
+_MONTH_TOKENS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6,
+    "jul": 7, "july": 7, "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
+    "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+_MONTH_FULL = ["", "January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December"]
+_AT_DESC = {
+    "@hourly": "Hourly", "@reboot": "At system reboot",
+    "@daily": "Daily at midnight", "@midnight": "Daily at midnight",
+    "@weekly": "Every Sunday at midnight", "@monthly": "Monthly on day 1 at midnight",
+    "@yearly": "Yearly on January 1 at midnight",
+    "@annually": "Yearly on January 1 at midnight",
+}
+
+
+class _Undescribable(Exception):
+    pass
+
+
+def _tok_num(token: str, token_map: dict | None, lo: int, hi: int) -> int:
+    t = token.strip().lower()
+    if token_map and t in token_map:
+        return token_map[t]
+    try:
+        n = int(t)
+    except ValueError:
+        raise _Undescribable
+    if not lo <= n <= hi:
+        raise _Undescribable
+    return n
+
+
+def _parse_field(field: str, token_map: dict | None, lo: int, hi: int):
+    """Returns ("all", None) | ("step", n) | ("values", [ints])."""
+    f = field.strip()
+    if f == "*":
+        return ("all", None)
+    if "/" in f:
+        base, _, step = f.partition("/")
+        if base.strip() != "*" or not step.strip().isdigit():
+            raise _Undescribable
+        n = int(step)
+        if n <= 1:
+            return ("all", None)
+        if n > hi:
+            raise _Undescribable
+        return ("step", n)
+    vals: list[int] = []
+    for part in f.split(","):
+        part = part.strip()
+        if not part:
+            raise _Undescribable
+        if "-" in part:
+            a, _, b = part.partition("-")
+            start = _tok_num(a, token_map, lo, hi)
+            end = _tok_num(b, token_map, lo, hi)
+            if end < start:
+                raise _Undescribable
+            vals.extend(range(start, end + 1))
+        else:
+            vals.append(_tok_num(part, token_map, lo, hi))
+    out = sorted(set(vals))
+    if not out:
+        raise _Undescribable
+    return ("values", out)
+
+
+def _fmt_time(hour: int, minute: int) -> str:
+    ap = "AM" if hour < 12 else "PM"
+    return f"{hour % 12 or 12}:{minute:02d} {ap}"
+
+
+def _join_and(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _day_prefix(days: list[int]) -> str:
+    if days == [1, 2, 3, 4, 5]:
+        return "Weekdays"
+    if days == [0, 6]:
+        return "Weekends"
+    if len(days) == 1:
+        return f"Every {_DOW_FULL[days[0]]}"
+    return "Every " + _join_and([_DOW_FULL[d] for d in days])
+
+
+def _day_suffix(days: list[int]) -> str:
+    if days == [1, 2, 3, 4, 5]:
+        return "on weekdays"
+    if days == [0, 6]:
+        return "on weekends"
+    if len(days) == 1:
+        return f"on {_DOW_FULL[days[0]]}"
+    return "on " + _join_and([f"{_DOW_FULL[d]}s" for d in days])
+
+
+def _describe5(minute_f: str, hour_f: str, dom_f: str, mon_f: str, dow_f: str) -> str:
+    minute = _parse_field(minute_f, None, 0, 59)
+    hour = _parse_field(hour_f, None, 0, 23)
+    dom = _parse_field(dom_f, None, 1, 31)
+    month = _parse_field(mon_f, _MONTH_TOKENS, 1, 12)
+    dow = _parse_field(dow_f, DAY_NUM, 0, 7)
+    if dow[0] == "values":
+        dow = ("values", sorted({0 if v == 7 else v for v in dow[1]}))
+
+    interval: str | None = None
+    times: list[str] = []
+    hourly_at: str | None = None
+    if minute[0] == "all" and hour[0] == "all":
+        interval = "Every minute"
+    elif minute[0] == "step" and hour[0] == "all":
+        interval = f"Every {minute[1]} minutes"
+    elif minute[0] == "all" and hour[0] == "step":
+        interval = f"Every minute, every {hour[1]} hours"
+    elif hour[0] == "step":
+        if minute[0] == "values" and len(minute[1]) == 1:
+            if minute[1][0] == 0:
+                interval = f"Every {hour[1]} hours"
+            else:
+                interval = f"At :{minute[1][0]:02d} past every {hour[1]} hours"
+        else:
+            raise _Undescribable
+    elif hour[0] == "all":
+        if minute[0] != "values" or len(minute[1]) > 4:
+            raise _Undescribable
+        hourly_at = "Every hour at " + _join_and([f":{m:02d}" for m in minute[1]])
+    else:
+        if minute[0] != "values" or hour[0] != "values":
+            raise _Undescribable
+        combos = [(h, m) for h in hour[1] for m in minute[1]]
+        if len(combos) > 4:
+            raise _Undescribable
+        times = [_fmt_time(h, m) for h, m in combos]
+
+    prefix: str | None = None   # "Every Monday" / "Weekdays" (time-based, dow only)
+    suffix: str | None = None   # "on weekdays" / "on January 1" (lowercase start)
+    if dom[0] == "all" and month[0] == "all":
+        if dow[0] == "values":
+            prefix = _day_prefix(dow[1])
+            suffix = _day_suffix(dow[1])
+        elif dow[0] == "step":
+            raise _Undescribable
+    else:
+        bits: list[str] = []
+        if month[0] == "values" and dom[0] == "values":
+            if len(month[1]) == 1 and len(dom[1]) == 1:
+                bits.append(f"on {_MONTH_FULL[month[1][0]]} {dom[1][0]}")
+            else:
+                raise _Undescribable
+        elif dom[0] == "values":
+            if len(dom[1]) > 4:
+                raise _Undescribable
+            bits.append("on day " + _join_and([str(d) for d in dom[1]]) + " of the month")
+        elif month[0] == "values":
+            if len(month[1]) > 4:
+                raise _Undescribable
+            bits.append("every day in " + _join_and([_MONTH_FULL[m] for m in month[1]]))
+        elif dom[0] == "step":
+            bits.append(f"every {dom[1]} days")
+        else:
+            raise _Undescribable
+        if dow[0] == "values":
+            bits.append(_day_suffix(dow[1]))
+        elif dow[0] == "step":
+            raise _Undescribable
+        suffix = " or ".join(bits)  # cron fires when EITHER day field matches
+
+    if interval:
+        return interval if suffix is None else f"{interval} {suffix}"
+    if hourly_at:
+        return hourly_at if suffix is None else f"{hourly_at} {suffix}"
+    at = " at " + _join_and(times)
+    if prefix:
+        return prefix + at
+    if suffix:
+        return suffix[0].upper() + suffix[1:] + at
+    return "Daily" + at
+
+
+def describe_schedule(schedule: str) -> str:
+    """Describe a cron schedule in plain English; returns input on anything odd."""
+    s = " ".join(schedule.split())
+    if s in _AT_DESC:
+        return _AT_DESC[s]
+    parts = s.split(" ")
+    if len(parts) != 5:
+        return schedule
+    try:
+        return _describe5(*parts)
+    except _Undescribable:
+        return schedule
+    except Exception:
+        return schedule
