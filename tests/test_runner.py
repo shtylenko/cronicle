@@ -52,3 +52,14 @@ def test_quoting_preserved_through_argv(env, capsys):
     runs = store.list_runs("j1")
     assert len(runs) == 1
     assert "a  b" in store.read_log(runs[0]["id"])["text"]
+
+
+def test_single_argv_command_runs_verbatim(env, capsys):
+    # the writer quotes the command as one shell word; re-quoting it here
+    # would make the inner `sh -c` exec the whole string as one program (127)
+    cmd = "cd /tmp && echo chained-left && echo chained-right"
+    assert runner.main(["--job-id", "j2", "--", cmd]) == 0
+    runs = store.list_runs("j2")
+    assert len(runs) == 1
+    text = store.read_log(runs[0]["id"])["text"]
+    assert "chained-left" in text and "chained-right" in text

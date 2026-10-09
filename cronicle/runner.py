@@ -36,9 +36,15 @@ def main(argv: list[str] | None = None) -> int:
     rest = list(args.command)
     if rest and rest[0] == "--":
         rest = rest[1:]  # argparse REMAINDER keeps the separator
-    # shlex.join preserves argument boundaries lost to shell word-splitting
-    # between the crontab line and argv (quoting, repeated spaces).
-    command = shlex.join(rest).strip()
+    if len(rest) == 1:
+        # The writer quotes the command as one shell word: use it verbatim.
+        # shlex.join() here would wrap it in quotes again, and the inner
+        # `sh -c` would then try to execute the whole string as one program.
+        command = rest[0].strip()
+    else:
+        # shlex.join preserves argument boundaries lost to shell word-splitting
+        # between the crontab line and argv (quoting, repeated spaces).
+        command = shlex.join(rest).strip()
     if not command:
         print("cronicle-run: empty command", file=sys.stderr)
         return 2

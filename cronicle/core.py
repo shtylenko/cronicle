@@ -3,7 +3,7 @@
 Jobs saved through cronicle carry a marker comment above their entry::
 
     # cronicle id=1a2b3c4d name=backup
-    0 2 * * * /path/to/cronicle-run --job-id 1a2b3c4d -- /opt/backup.sh
+    0 2 * * * /path/to/cronicle-run --job-id 1a2b3c4d -- '/opt/backup.sh -v'
 
 Pre-existing entries without a marker are still listed (with a stable
 content-derived id) and gain a marker the first time they are updated.
@@ -18,6 +18,7 @@ import hashlib
 import os
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import sys
@@ -162,7 +163,18 @@ def unwrap(command: str) -> tuple[str, bool, str | None]:
     m = WRAP_RE.search(command.strip())
     if not m:
         return (command, False, None)
-    return (m.group(2).strip(), True, m.group(1))
+    inner = m.group(2).strip()
+    if inner[:1] in ("'", '"'):
+        # wrap_command() emits the command as one shlex.quote()d word; reverse it.
+        # Anything that is not exactly one shell word passes through untouched,
+        # which keeps legacy/hand-written entries readable.
+        try:
+            toks = shlex.split(inner)
+        except ValueError:
+            toks = []
+        if len(toks) == 1:
+            inner = toks[0]
+    return (inner, True, m.group(1))
 
 
 def runner_prefix(job_id: str) -> str:
@@ -174,7 +186,9 @@ def runner_prefix(job_id: str) -> str:
 
 def wrap_command(job_id: str, command: str) -> str:
     original, _, _ = unwrap(command)
-    return f"{runner_prefix(job_id)} {original}"
+    # Quote as ONE shell word: cron runs the entry via `sh -c`, and an unquoted
+    # `&&`/`;`/`|` would split the line so the tail runs outside the wrapper.
+    return f"{runner_prefix(job_id)} {shlex.quote(original)}"
 
 
 def _stable_id(raw_line: str, seen: dict[str, int]) -> str:

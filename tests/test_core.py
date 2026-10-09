@@ -1,3 +1,5 @@
+import subprocess
+
 import pytest
 
 from cronicle import core
@@ -180,3 +182,42 @@ def test_validate_project_name():
     for bad in ["", "  ", "a/b", "a\nb", "x" * 61, "semi;colon"]:
         with pytest.raises(core.InvalidJob):
             core.validate_project_name(bad)
+
+
+def _wrapper_tail(entry: str) -> str:
+    """Everything after `--` in a wrapped entry: what cron's sh must keep whole."""
+    m = core.WRAP_RE.search(entry)
+    assert m is not None
+    return m.group(2)
+
+
+def _sh_argv(tail: str) -> list[str]:
+    """Argv words real /bin/sh derives from the tail (cron invokes `sh -c`)."""
+    p = subprocess.run(["sh", "-c", f"printf '<%s>\\n' {tail}"],
+                       capture_output=True, text=True)
+    return [line[1:-1] for line in p.stdout.splitlines()]
+
+
+def test_compound_command_survives_shell_round_trip(fake_crontab):
+    # regression: an unquoted `&&` split the crontab line, so the right half
+    # ran outside the wrapper while cronicle logged a 0ms exit-0 stub run
+    command = "cd /srv/app && ./run.sh --date auto"
+    job = core.add_job("0 2 * * *", command, name="compound")
+    assert core.get_job(job.id).command == command
+    entry = next(line for line in fake_crontab.read_text().splitlines()
+                 if line and not line.startswith("#"))
+    assert _sh_argv(_wrapper_tail(entry)) == [command]
+
+
+def test_legacy_unquoted_wrapper_still_unwraps(fake_crontab):
+    fake_crontab.write_text(
+        "# cronicle id=abc123 name=legacy\n"
+        "0 2 * * * /usr/bin/python -m cronicle.runner --job-id abc123 -- cd /srv/app && ./run.sh\n")
+    job = core.get_job("abc123")
+    assert job.wrapped
+    assert job.command == "cd /srv/app && ./run.sh"
+    # re-sync (update with the identical command) rewrites the quoted form
+    core.update_job("abc123", command="cd /srv/app && ./run.sh")
+    entry = next(line for line in fake_crontab.read_text().splitlines()
+                 if line and not line.startswith("#"))
+    assert _sh_argv(_wrapper_tail(entry)) == ["cd /srv/app && ./run.sh"]
