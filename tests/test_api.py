@@ -26,6 +26,11 @@ def test_job_crud_and_run_flow(client):
     assert r.json()["schedule"] == "5 * * * *"
     assert r.json()["description"] == "Test job"  # preserved when not patched
 
+    r = client.put(f"/api/jobs/{job_id}", json={"enabled": False})
+    assert r.status_code == 200 and r.json()["enabled"] is False
+    r = client.put(f"/api/jobs/{job_id}", json={"enabled": True})
+    assert r.json()["enabled"] is True
+
     r = client.post(f"/api/jobs/{job_id}/run")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"

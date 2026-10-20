@@ -75,15 +75,26 @@ async function refreshJobs() {
     const tr = document.createElement("tr");
     const status = j.enabled
       ? (j.wrapped ? `<span class="pill ok">on · logged</span>` : `<span class="pill running">on · raw</span>`)
-      : `<span class="pill off">off</span>`;
+      : `<span class="pill off">paused</span>`;
     tr.innerHTML =
       `<td>${esc(j.name || "(unnamed)")}<br><span class="mono" style="color:var(--muted)">${esc(j.id)}</span></td><td>${esc(j.project || "—")}</td><td>${esc(j.description || "")}</td>` +
       `<td class="nowrap"><code>${esc(j.schedule)}</code></td><td class="nowrap">${esc(j.schedule_human || j.schedule)}</td><td><code>${esc(j.command)}</code></td>` +
       `<td>${status}</td>` +
-      `<td class="actions"><button data-a="run">Run</button><button data-a="edit">Edit</button><button data-a="del">Delete</button></td>`;
+      `<td class="actions"><button data-a="run">Run</button><button data-a="pause">${j.enabled ? "Pause" : "Resume"}</button><button data-a="edit">Edit</button><button data-a="del">Delete</button></td>`;
     tr.querySelector('[data-a="run"]').onclick = async () => {
       try { await api(`/api/jobs/${j.id}/run`, {method: "POST"}); refreshRuns(); }
       catch (e) { alert("Run failed: " + e.message); }
+    };
+    tr.querySelector('[data-a="pause"]').onclick = async () => {
+      try {
+        await api(`/api/jobs/${j.id}`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: !j.enabled}),
+        });
+        refreshJobs();
+      }
+      catch (e) { alert("Failed: " + e.message); }
     };
     tr.querySelector('[data-a="edit"]').onclick = () => {
       document.querySelector("#f-id").value = j.id;
