@@ -61,3 +61,4 @@ label.inline { font-size: 13px; color: var(--muted); display: flex; gap: 6px; al
 #log { background: #0b0e13; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 12px; font-size: 13px; overflow-x: auto; max-height: 480px; overflow-y: auto; }
 tr.run-row { cursor: pointer; }
 tr.run-row:hover td { background: #1a2230; }
+#jobs tr.paused td { color: var(--muted); }

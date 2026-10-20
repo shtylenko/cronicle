@@ -73,6 +73,7 @@ async function refreshJobs() {
   jobsBody.innerHTML = jobs.length ? "" : `<tr><td colspan="8">No cron jobs yet.</td></tr>`;
   for (const j of jobs) {
     const tr = document.createElement("tr");
+    if (!j.enabled) tr.classList.add("paused");
     const status = j.enabled
       ? (j.wrapped ? `<span class="pill ok">on · logged</span>` : `<span class="pill running">on · raw</span>`)
       : `<span class="pill off">paused</span>`;
